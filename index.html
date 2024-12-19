@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Séquence</title>
+  <script type="text/javascript" src="./config.js" defer></script>
+  <script
+    type="text/javascript"
+    src="https://b82b1763d1c3.eu-west-3.captcha-sdk.awswaf.com/b82b1763d1c3/jsapi.js"
+    defer
+  ></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f9f9f9;
+      color: #333;
+      text-align: center;
+    }
+    h1 {
+      color: #007bff;
+    }
+    form {
+      margin: 20px auto;
+      padding: 10px;
+      width: 300px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    label {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      display: block;
+    }
+    input[type="number"] {
+      width: calc(100% - 20px);
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      color: white;
+      background-color: #007bff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #output {
+      margin: 20px auto;
+      padding: 10px;
+      width: 90%;
+      max-width: 600px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      text-align: left;
+    }
+    #my-captcha-container {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Générateur de Séquence</h1>
+  <form id="sequenceForm">
+    <label for="numberInput">Entrez un nombre (1-1000) :</label>
+    <input type="number" id="numberInput" min="1" max="1000" required />
+    <button type="submit">Soumettre</button>
+  </form>
+  <div id="output"></div>
+  <div id="my-captcha-container"></div>
+
+  <script type="text/javascript">
+    document.getElementById("sequenceForm").addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      const N = parseInt(document.getElementById("numberInput").value);
+      const outputDiv = document.getElementById("output");
+      const form = document.getElementById("sequenceForm");
+
+      form.style.display = "none";
+      outputDiv.innerHTML = "";
+      let currentRequest = 1;
+
+      const makeRequest = () => {
+        if (currentRequest > N) return;
+
+        fetch("https://api.prod.jcloudify.com/whoami")
+          .then((response) => {
+            if (response.status === 405) throw new Error("CaptchaRequired");
+            if (!response.ok) throw new Error("Forbidden");
+            return response.text();
+          })
+          .then((data) => {
+            outputDiv.innerHTML += `<p>${currentRequest}. ${data}</p>`;
+            currentRequest++;
+            setTimeout(makeRequest, 1000);
+          })
+          .catch((error) => handleError(error, makeRequest));
+      };
+
+      const handleError = (error, retryFunction) => {
+        if (error.message === "CaptchaRequired") {
+          handleCaptcha().then(() => setTimeout(retryFunction, 1000));
+        } else if (error.message === "Forbidden") {
+          outputDiv.innerHTML += `<p>${currentRequest}. Forbidden</p>`;
+          currentRequest++;
+          setTimeout(retryFunction, 1000);
+        } else {
+          console.error("Unexpected error:", error);
+        }
+      };
+
+      const handleCaptcha = () => {
+        return new Promise((resolve) => {
+          showMyCaptcha();
+          window.captchaResolved = resolve;
+        });
+      };
+
+      makeRequest();
+    });
+
+    function showMyCaptcha() {
+      const container = document.querySelector("#my-captcha-container");
+
+      AwsWafCaptcha.renderCaptcha(container, {
+        apiKey: window.WAF_API_KEY,
+        onSuccess: captchaExampleSuccessFunction,
+        onError: captchaExampleErrorFunction,
+      });
+    }
+
+    function captchaExampleSuccessFunction(wafToken) {
+      AwsWafIntegration.fetch("...WAF-protected URL...", { method: "POST" })
+        .then(() => {
+          if (window.captchaResolved) window.captchaResolved();
+        });
+    }
+
+    function captchaExampleErrorFunction(error) {
+      console.error("CAPTCHA error:", error);
+    }
+  </script>
+</body>
+</html>
